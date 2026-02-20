@@ -1,0 +1,70 @@
+name: Fetch Kaggle Telco Churn Data
+
+on:
+  workflow_dispatch:
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Configure Kaggle credentials
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          mkdir -p ~/.kaggle
+          printf '{"username":"%s","key":"%s"}' "$KAGGLE_USERNAME" "$KAGGLE_KEY" > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+
+      - name: Download dataset
+        run: |
+          bash scripts/download_kaggle_telco.sh
+
+      - name: Upload data artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: telco-customer-churn-data
+          path: data/
+      - name: Generate preprocessing report + figures
+        run: |
+          python scripts/preprocess_and_viz.py
+
+      - name: Upload artifacts (data + reports)
+        uses: actions/upload-artifact@v4
+        with:
+          name: telco-data-and-report
+          path: |
+            data/
+            reports/
+      - name: Install Pandoc + LaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc texlive-latex-base texlive-latex-recommended texlive-fonts-recommended texlive-latex-extra
+
+      - name: Build gallery markdown
+        run: |
+          python scripts/make_figures_gallery.py
+
+      - name: Convert gallery to PDF
+        run: |
+          pandoc reports/figures_gallery.md -o reports/figures_gallery.pdf
+
+      - name: Upload artifacts (data + reports + pdf)
+        uses: actions/upload-artifact@v4
+        with:
+          name: telco-data-reports-pdf
+          path: |
+            data/
+            reports/
